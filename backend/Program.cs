@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MusicStreamingAPI.Data;
 using MusicStreamingAPI.Models;
+using MusicStreamingAPI.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,17 +53,20 @@ builder.Services.AddAuthorization();
 // ===== Configuração do CORS =====
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngular", policy =>
-    {
-        policy.WithOrigins("http://localhost:4200")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
+    options.AddPolicy("AllowAngularApp",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:4200")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
 });
 
 // ===== Controllers =====
 builder.Services.AddControllers();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 // ===== Swagger =====
 builder.Services.AddEndpointsApiExplorer();
@@ -107,6 +111,7 @@ builder.Services.AddSwaggerGen(c =>
 
 // ===== Build =====
 var app = builder.Build();
+app.UseExceptionHandler();
 
 // ===== Swagger =====
 if (app.Environment.IsDevelopment())
