@@ -43,14 +43,7 @@ public class AuthController : ControllerBase
 
             var user = await _userManager.FindByEmailAsync(dto.Email);
 
-            if (user == null)
-            {
-                return Unauthorized(new { message = "E-mail ou senha inválidos" });
-            }
-
-            var isPasswordValid = await _userManager.CheckPasswordAsync(user, dto.Senha);
-
-            if (!isPasswordValid)
+            if (user == null || !await _userManager.CheckPasswordAsync(user, dto.Senha))
             {
                 return Unauthorized(new { message = "E-mail ou senha inválidos" });
             }
@@ -145,6 +138,10 @@ public class AuthController : ControllerBase
     /// </summary>
     private string GenerateJwtToken(Usuario user)
     {
+        var securityKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, user.Email!),
@@ -153,15 +150,14 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.Name, user.Nome)
         };
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var expiresInMinutes = int.Parse(_configuration["Jwt:ExpiresInMinutes"] ?? "60");
 
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
             audience: _configuration["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(24),
-            signingCredentials: creds
+            expires: DateTime.UtcNow.AddMinutes(expiresInMinutes),
+            signingCredentials: credentials
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);

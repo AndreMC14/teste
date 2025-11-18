@@ -17,14 +17,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // ===== Configuração do Identity =====
 builder.Services.AddIdentity<Usuario, IdentityRole<int>>(options =>
 {
-    // Configurações de senha
     options.Password.RequireDigit = false;
     options.Password.RequireLowercase = false;
     options.Password.RequireUppercase = false;
     options.Password.RequireNonAlphanumeric = false;
     options.Password.RequiredLength = 6;
-
-    // Configurações de usuário
     options.User.RequireUniqueEmail = true;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -35,24 +32,22 @@ var jwtKey = builder.Configuration["Jwt:Key"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
-    };
-});
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+        };
+    });
+builder.Services.AddAuthorization();
 
 // ===== Configuração do CORS =====
 builder.Services.AddCors(options =>
@@ -66,10 +61,10 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ===== Configuração dos Controllers =====
+// ===== Controllers =====
 builder.Services.AddControllers();
 
-// ===== Configuração do Swagger =====
+// ===== Swagger =====
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -85,7 +80,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Configurar autenticação JWT no Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header usando o esquema Bearer. Exemplo: \"Authorization: Bearer {token}\"",
@@ -111,40 +105,38 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// ===== Build da aplicação =====
+// ===== Build =====
 var app = builder.Build();
 
-// ===== Middleware =====
+// ===== Swagger =====
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Music Streaming API v1");
-        c.RoutePrefix = string.Empty; // Swagger na raiz (http://localhost:5000)
+        c.RoutePrefix = string.Empty;
     });
 }
 
 app.UseHttpsRedirection();
 
-// IMPORTANTE: A ordem dos middlewares importa!
-app.UseCors("AllowAngular");
-app.UseAuthentication();
-app.UseAuthorization();
+// ===== ORDEM CORRETA =====
+app.UseCors("AllowAngular");      // 1) CORS
+app.UseAuthentication();           // 2) Auth
+app.UseAuthorization();            // 3) Authorization
 
 app.MapControllers();
 
-// ===== Inicialização do banco de dados =====
+// ===== Inicialização do BD =====
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        
-        // Criar banco de dados se não existir
         context.Database.EnsureCreated();
-        
+
         Console.WriteLine("✅ Banco de dados inicializado com sucesso!");
     }
     catch (Exception ex)
